@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Local AES-256 Encryptor — DECRYPT</title>
+<style>
+/* --- SHARED CSS STYLES --- */
+:root{--accent:#0ea5e9;--radius:16px;--bg:#eef6ff;--bg-gradient:linear-gradient(45deg, #eef6ff, #f0f9ff);--text:#111;--section-bg:#fff;--border:#e6eef6;--lead:#444;--note:#555;--card-bg:linear-gradient(135deg, #f0f9ff, #fff);--shadow:0 6px 16px rgba(0,0,0,0.08);--shadow-sm:0 2px 8px rgba(0,0,0,0.04);}
+.dark-mode{--bg:#1a1a2e;--bg-gradient:linear-gradient(45deg, #16162a, #232a4a);--text:#f0f0f0;--section-bg:#2d2d4f;--border:#3a3a5a;--lead:#ccc;--note:#aaa;--card-bg:linear-gradient(135deg, #2d2d4f, #3a3a5a);--shadow:0 6px 16px rgba(0,0,0,0.3);--shadow-sm:0 2px 8px rgba(0,0,0,0.2);}
+body{font-family:Inter,system-ui,Segoe UI,Arial;margin:0 auto;padding:16px;color:var(--text);background:var(--bg-gradient);max-width:1000px;line-height:1.5;padding-bottom:16px;transition:background 0.3s, color 0.3s;}
+h1{font-size:26px;text-align:center;margin-bottom:6px;font-weight:700;}
+h1 small{font-weight:300;display:block;font-size:16px;color:var(--lead);margin-top:4px;}
+.lead{color:var(--lead);text-align:center;margin-bottom:20px;font-size:15px;}
+.section{background:var(--section-bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:18px;box-shadow:var(--shadow);}
+h2{font-size:16px;margin-bottom:8px;color:var(--accent);}
+label{display:block;margin-top:10px;font-weight:600;font-size:14px;}
+textarea,input,select{width:100%;padding:10px;margin-top:6px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box;transition:border 0.3s;}
+textarea:focus,input:focus,select:focus{border-color:var(--accent);outline:none;}
+textarea{resize:none;min-height:60px;}
+button{padding:12px 14px;border-radius:var(--radius);border:0;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;font-size:15px;margin-top:8px;width:100%;transition:transform 0.2s, box-shadow 0.2s, background 0.2s;}
+button:hover{filter:brightness(1.1);}
+button:active{transform:translateY(1px);box-shadow:none;}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.col{flex:1 1 100%;}@media(min-width:480px){.col{flex:1;}}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:12px 16px;border-radius:var(--radius);box-shadow:var(--shadow);display:none;z-index:1000;font-weight:600;}
+.input-with-icon{position:relative;display:flex;align-items:center;}
+.input-with-icon input, .input-with-icon textarea{padding-right:45px;flex-grow:1;}
+.input-with-icon button{position:absolute;right:10px;background:none;border:none;color:var(--text);cursor:pointer;font-size:18px;width:auto;padding:0;margin:0;}
+.copy-btn, .paste-btn{display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;font-size:13px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;margin-left:8px;transition:background 0.2s;}
+.copy-btn:hover, .paste-btn:hover{filter:brightness(1.1);}
+.theme-toggle{position:fixed;top:16px;right:16px;z-index:1000;background:none;border:none;cursor:pointer;font-size:24px;color:var(--text);transition:color 0.3s;}
+/* Removed .nav-bar and home-card styles */
+</style>
+</head>
+<body>
+<h1>AES-256 Decryptor <small>Retrieve your secure data.</small></h1>
+<div class="lead">Use this page to decrypt a blob. Open **encryption.html** to encrypt.</div>
+<button id="themeToggleBtn" class="theme-toggle">☀️</button>
+
+<div id="decryptSection">
+    <div class="section">
+        <h2>Decrypt</h2>
+        <label>Paste encrypted blob (Base64 JSON)</label>
+        <div class="input-with-icon">
+            <textarea id="cipherInput" placeholder="Paste blob here"></textarea>
+            <button type="button" onclick="pasteText('cipherInput')" class="paste-btn">Paste</button>
+        </div>
+        
+        <div id="decryptKeySection" style="display: none;">
+            <label>Import raw key (base64 of 32 bytes)</label>
+            <input id="decryptKeyInput" placeholder="Base64 key">
+        </div>
+        
+        <div id="decryptPasswordBox" style="margin-top:10px; display: none;">
+            <label>Password (if used for encryption)</label>
+            <div class="input-with-icon">
+                <input id="decryptPwInput" type="password" placeholder="Password if encrypted with password">
+                <button type="button" id="toggleDecryptPwBtn">👁️</button>
+            </div>
+
+            <label style="margin-top: 15px;">**Authenticator Code (TOTP)**</label>
+            <input id="totpCodeInput" type="text" maxlength="6" pattern="\d{6}" placeholder="Enter 6-digit TOTP code" style="display: none;">
+        </div>
+        
+        <div class="row">
+            <div class="col"><button id="decryptBtn">Decrypt</button></div>
+            <div class="col"><button id="decryptAndCopy">Decrypt + Copy</button></div>
+        </div>
+        
+        <label>Decrypted output</label>
+        <div class="input-with-icon">
+            <textarea id="decrypted" readonly></textarea>
+            <button type="button" onclick="copyText('decrypted')" class="copy-btn">Copy</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// --- EMBEDDED JAVASCRIPT ---
+
+// --- Core Cryptography/Utility Functions (Needed by Decrypt) ---
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+const BASE32_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+function toB64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function fromB64(s) { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; }
+function showToast(msg) { 
+    const t = document.getElementById('toast'); 
+    t.textContent = msg; 
+    t.style.display = 'block'; 
+    setTimeout(() => { t.style.display = 'none'; }, 1500); 
+}
+async function copyText(id) {
+    const el = document.getElementById(id);
+    if (!el.value) { showToast('Nothing to copy'); return; }
+    if (navigator.clipboard) {
+        try { await navigator.clipboard.writeText(el.value); showToast('Copied'); return; } catch (err) { console.error('Failed to copy: ', err); }
+    }
+    el.select(); document.execCommand('copy'); showToast('Copied (fallback)');
+}
+async function pasteText(id) {
+    const el = document.getElementById(id);
+    if (navigator.clipboard) {
+        try { const text = await navigator.clipboard.readText(); el.value = text; showToast('Pasted'); el.dispatchEvent(new Event('input')); return; } catch (err) { console.error('Failed to paste: ', err); showToast('Failed to paste from clipboard'); }
+    }
+}
+window.copyText = copyText;
+window.pasteText = pasteText;
+
+// Argon2id placeholder using PBKDF2 as fallback
+async function deriveKeyArgon2(password, salt, iterations) {
+    const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' }, baseKey, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+}
+
+// Base32 Decoder
+function base32ToUint8Array(base32) {
+    base32 = base32.toUpperCase().replace(/=/g, '',).replace(/\s/g, '');
+    let bits = '';
+    for (let i = 0; i < base32.length; i++) {
+        const val = BASE32_CHARS.indexOf(base32.charAt(i));
+        if (val === -1) throw new Error('Invalid Base32 character');
+        bits += val.toString(2).padStart(5, '0');
+    }
+    const bytes = [];
+    for (let i = 0; i < bits.length; i += 8) {
+        const byte = bits.substring(i, i + 8);
+        if (byte.length === 8) bytes.push(parseInt(byte, 2));
+    }
+    return new Uint8Array(bytes).buffer;
+}
+
+// TOTP implementation using HMAC-SHA1 (RFC 6238)
+async function totp(secretBase32, timeStep = 30, digits = 6) {
+    try {
+        const keyBuffer = base32ToUint8Array(secretBase32);
+        const key = await crypto.subtle.importKey('raw', keyBuffer, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+
+        const epoch = Math.floor(Date.now() / 1000);
+        const counter = Math.floor(epoch / timeStep);
+        
+        const counterBuffer = new ArrayBuffer(8);
+        const counterView = new DataView(counterBuffer);
+        counterView.setUint32(0, Math.floor(counter / 0x100000000), false);
+        counterView.setUint32(4, counter % 0x100000000, false);
+
+        const hmacBuffer = await crypto.subtle.sign('HMAC', key, counterBuffer);
+        const hmac = new Uint8Array(hmacBuffer);
+
+        const offset = hmac[hmac.length - 1] & 0xf;
+        let truncatedHash = 
+            ((hmac[offset] & 0x7f) << 24) |
+            ((hmac[offset + 1] & 0xff) << 16) |
+            ((hmac[offset + 2] & 0xff) << 8) |
+            (hmac[offset + 3] & 0xff);
+
+        const powerOfTen = Math.pow(10, digits);
+        const code = truncatedHash % powerOfTen;
+
+        return String(code).padStart(digits, '0');
+    } catch (e) {
+        console.error("TOTP Error:", e);
+        return null;
+    }
+}
+// --- End Core Functions ---
+
+// Toggle Password Visibility
+document.getElementById('toggleDecryptPwBtn').onclick = (e) => {
+    const pwInput = document.getElementById('decryptPwInput');
+    pwInput.type = pwInput.type === 'password' ? 'text' : 'password';
+    e.target.textContent = pwInput.type === 'password' ? '👁️' : '🙈';
+};
+
+// Decrypt Function
+async function decrypt() {
+    const blobB64 = document.getElementById('cipherInput').value.trim();
+    if (!blobB64) { showToast('Paste a blob to decrypt'); return; }
+
+    try {
+        const meta = JSON.parse(atob(blobB64));
+        if (!meta.iv || !meta.ct) {
+            showToast('Invalid blob format. Missing IV or ciphertext.');
+            return;
+        }
+
+        let keyToUse;
+        const pwIters = 3; // Uses the default from the encrypt page
+
+        if (meta.salt) {
+            const pw = document.getElementById('decryptPwInput').value;
+            const totpCode = document.getElementById('totpCodeInput').value.trim();
+
+            if (!pw) { showToast('Enter the password'); return; }
+            if (meta.totp && !totpCode) { showToast('Enter the 2FA Authenticator Code'); return; }
+
+            // TOTP Validation
+            if (meta.totp) {
+                const expectedTotp = await totp(meta.totp);
+                if (expectedTotp === null) {
+                    showToast('TOTP secret invalid or calculation failed.');
+                    return;
+                }
+                
+                // Only checking the current code
+                if (expectedTotp !== totpCode) {
+                    showToast(`Authenticator Code Mismatch. Decryption failed.`);
+                    return;
+                }
+                showToast('Authenticator Code validated successfully.');
+            }
+
+            keyToUse = await deriveKeyArgon2(pw, fromB64(meta.salt), pwIters);
+        } else {
+            const decryptKeyInput = document.getElementById('decryptKeyInput').value;
+            if (!decryptKeyInput) {
+                showToast('Please import the key used for encryption.');
+                return;
+            }
+            const raw = fromB64(decryptKeyInput);
+            keyToUse = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
+        }
+
+        const ptBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(meta.iv) }, keyToUse, fromB64(meta.ct));
+        document.getElementById('decrypted').value = dec.decode(ptBuf);
+        showToast('Decryption Successful');
+
+        // Clear sensitive inputs after successful operation
+        document.getElementById('cipherInput').value = '';
+        document.getElementById('decryptKeyInput').value = '';
+        document.getElementById('totpCodeInput').value = ''; 
+        document.getElementById('decryptPwInput').value = ''; 
+
+    } catch (e) {
+        showToast('Decryption Failed. Invalid blob, key, or authenticator code.');
+        console.error(e);
+    }
+}
+
+document.getElementById('decryptBtn').onclick = decrypt;
+document.getElementById('decryptAndCopy').onclick = async () => { await decrypt(); copyText('decrypted'); };
+
+// Blob Input Listener (to show/hide password/key fields)
+document.getElementById('cipherInput').addEventListener('input', () => {
+    const blobB64 = document.getElementById('cipherInput').value.trim();
+    const decryptPasswordBox = document.getElementById('decryptPasswordBox');
+    const decryptKeySection = document.getElementById('decryptKeySection');
+    const totpCodeInput = document.getElementById('totpCodeInput');
+
+    decryptPasswordBox.style.display = 'none';
+    decryptKeySection.style.display = 'none';
+    totpCodeInput.style.display = 'none';
+
+    try {
+        const meta = JSON.parse(atob(blobB64));
+        if (meta.salt) {
+            decryptPasswordBox.style.display = 'block';
+            if (meta.totp) {
+                totpCodeInput.style.display = 'block';
+            }
+        } else {
+            decryptKeySection.style.display = 'block';
+        }
+    } catch {
+        // Ignore JSON parse errors while typing
+    }
+});
+
+// Theme Toggle
+document.getElementById('themeToggleBtn').onclick = () => {
+    document.body.classList.toggle('dark-mode');
+    document.getElementById('themeToggleBtn').textContent = document.body.classList.contains('dark-mode') ? '🌙' : '☀️';
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('themeToggleBtn').textContent = document.body.classList.contains('dark-mode') ? '🌙' : '☀️';
+});
+</script>
+</body>
+</html>
